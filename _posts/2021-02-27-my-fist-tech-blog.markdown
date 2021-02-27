@@ -6,6 +6,7 @@ subtitle:   " JVM指令集与字节码的关系 | 字节码指令集的设计"
 date:       2021-02-27 00:26:00
 author:     "Booogu"
 header-img: "img/post-bg-2015.jpg"
+# header-style: text
 catalog: true
 tags:
     - Java
