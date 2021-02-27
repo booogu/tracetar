@@ -1,5 +1,6 @@
 ---
 layout:     post
+comments: true
 title:      "Java字节码剖析"
 subtitle:   " JVM指令集与字节码的关系 | 字节码指令集的设计"
 date:       2021-02-27 00:26:00
