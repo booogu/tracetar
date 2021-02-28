@@ -95,6 +95,10 @@ layout: default
     </div>
 </article>
 
+{% if site.intensedebate_comments %}
+{% include intensedebate-comments.html %}
+{% endif %}
+
 <!-- add support for mathjax by voleking-->
 {% if page.mathjax %}
 {% include mathjax_support.html %}

@@ -61,6 +61,9 @@ kramdown:
 # Disqus settings
 disqus_username: booogu-top
 
+# intensedebate comment setting
+intensedebate_comments: true
+
 # Netease settings
 netease_comment: false
 
