@@ -69,20 +69,40 @@
                             endif %} on {{ page.date | date: "%B %-d, %Y" }} </span>
                         <br>
 
+                        <div class="bar-content">
+                            <img class="header-img"
+                                src="https://csdnimg.cn/release/blogv2/dist/pc/img/articleReadEyes.png">
+                            <span class="header-span">{{ page.content | strip_html | strip_newlines | remove: " " |
+                                size}} 字
+                            </span>
 
-                        <span id="busuanzi_container_page_pv">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                stroke-linejoin="round" class="feather feather-file-text">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="16" y1="13" x2="8" y2="13"></line>
-                                <line x1="16" y1="17" x2="8" y2="17"></line>
-                                <polyline points="10 9 9 9 8 9"></polyline>
-                            </svg>
-                            {{ content | strip_html | strip_newlines | split: "" | size }}字 阅读量<span
-                                id="busuanzi_value_page_pv"></span>次
-                        </span>
+                            <img class="header-img"
+                                src="https://csdnimg.cn/release/blogv2/dist/pc/img/articleReadEyes.png">
+                            <span class="header-span">{{ page.content | strip_html | strip_newlines | remove: " " | size
+                                |
+                                divided_by: 350 | plus: 1 }} 分钟
+                            </span>
+
+                            <img class="header-img"
+                                src="https://csdnimg.cn/release/blogv2/dist/pc/img/articleReadEyes.png">
+                            <span class="header-span" id="busuanzi_value_page_pv">
+                            </span>
+                        </div>
+
+                        <!-- <div class="booogu-span">
+                            <img src="1.jpg">
+                            <span>{{ page.content | strip_html | strip_newlines | remove: " " | size }} 字</span>
+                            <div class="booogu-span">
+                                <img src="2.jpg">
+                                <span> {{ page.content | strip_html | strip_newlines | remove: " " | size |
+                                    divided_by: 350 | plus: 1 }} 分钟</span>
+                                <div class="booogu-span">
+                                    <img src="3.jpg">
+                                    <span> <span id="busuanzi_value_page_pv">
+                                        </span> 次</span>
+                                </div>
+                            </div>
+                        </div> -->
                     </div>
                 </div>
             </div>
@@ -128,9 +148,11 @@
                             endif %}
                             on {{ page.date | date: "%B %-d, %Y" }}</span>
                         <br>
-                        <span id="busuanzi_container_page_pv">
-                            阅读量<span id="busuanzi_value_page_pv"></span>次
-                        </span>
+
+                        <span>本文总共 {{ page.content | strip_html | strip_newlines | remove: " " | size }} 字 <b>·</b>
+                            阅读全文大约需要 {{ page.content | strip_html | strip_newlines | remove: " " | size |
+                            divided_by: 350 | plus: 1 }} 分钟 阅读量<span id="busuanzi_value_page_pv">
+                            </span>次</span>
                     </div>
                 </div>
             </div>

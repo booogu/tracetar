@@ -3,13 +3,12 @@
     <div class="container">
         <div class="row">
             <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <!-- {% include intensedebate-comments.html %} -->
                 <!-- SNS Link -->
                 {% include sns-links.html center=true %}
                 <p class="copyright text-muted">
                     Copyright &copy; {{ site.title }} {{ site.time | date: '%Y' }}
                     <br>
-
-
                     Powered by <a href="http://huangxuan.me">Hux Blog</a> |
                     <iframe style="margin-left: 2px; margin-bottom:-5px;" frameborder="0" scrolling="0" width="100px"
                         height="20px"
@@ -21,7 +20,6 @@
                     <span id="busuanzi_container_site_pv" style="display: inline;">
                         本站总访问量<span id="busuanzi_value_site_pv"></span>次</span>
                 </p>
-
             </div>
         </div>
     </div>
@@ -42,6 +40,12 @@
 
 <!-- script pointing to busuanzi.js -->
 <script src="{{ " /js/busuanzi.pure.mini.js" | prepend: site.baseurl }}"></script>
+
+<!-- <script type='text/javascript' src="{{ " /js/intensedebate.min.js" | prepend: site.baseurl }}"></script> -->
+<!-- <script type='text/javascript' src='https://www.intensedebate.com/js/genericCommentWrapperV2.js'></script> -->
+
+
+
 
 <!-- Service Worker -->
 {% if site.service-worker %}

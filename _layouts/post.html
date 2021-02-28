@@ -88,6 +88,7 @@ layout: default
                 <!-- Featured Tags -->
                 {% include featured-tags.html bottom=true %}
 
+
                 <!-- Friends Blog -->
                 {% include friends.html %}
             </div>
@@ -95,9 +96,17 @@ layout: default
     </div>
 </article>
 
-{% if site.intensedebate_comments %}
-{% include intensedebate-comments.html %}
+
+<!-- add intensedebate comment  -->
+{% if page.intensedebate_comments %}
+<div class="col-lg-8 col-lg-offset-2col-md-10 col-md-offset-1sidebar-container">
+    {% include intensedebate-comments.html %}
+</div>
 {% endif %}
+
+
+
+
 
 <!-- add support for mathjax by voleking-->
 {% if page.mathjax %}
@@ -158,3 +167,35 @@ layout: default
     }
 </style>
 {% endif %}
+
+
+<style type="text/css">
+    .header-img {
+        width: 24px;
+        height: 24px;
+        margin-top: 4px;
+    }
+
+    .header-span {
+        vertical-align: top;
+        margin-right: 12px;
+        line-height: 32px;
+    }
+
+    .booogu-span {
+        width: 20%;
+        height: 60px;
+        text-align: center;
+        display: inline;
+    }
+
+    span {
+        height: 100%;
+        vertical-align: middle;
+        line-height: 60px;
+    }
+
+    img {
+        vertical-align: middle;
+    }
+</style>
