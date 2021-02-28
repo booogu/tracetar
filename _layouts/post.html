@@ -88,9 +88,11 @@ layout: default
                 <!-- Featured Tags -->
                 {% include featured-tags.html bottom=true %}
 
-
                 <!-- Friends Blog -->
                 {% include friends.html %}
+
+                {% include intensedebate-comments.html %}
+
             </div>
         </div>
     </div>
@@ -98,11 +100,10 @@ layout: default
 
 
 <!-- add intensedebate comment  -->
-{% if page.intensedebate_comments %}
-<div class="col-lg-8 col-lg-offset-2col-md-10 col-md-offset-1sidebar-container">
-    {% include intensedebate-comments.html %}
-</div>
-{% endif %}
+<!-- {% if page.intensedebate_comments %} -->
+<!-- <div class="col-lg-8 col-lg-offset-2col-md-10 col-md-offset-1sidebar-container"> -->
+<!-- </div> -->
+<!-- {% endif %} -->
 
 
 
