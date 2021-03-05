@@ -47,9 +47,8 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
     }
 ````
 
-## <code>重点:</code>多模块交替协作的TM & RM 初始化
+## RM & TM 的初始化流程
 这里，我们以RMClient.init()为例说明，TMClient的初始化过程亦同理。
-### 首先登场的是RPC模块
 查看RMClient#init()的源码，我们发现，RMClient先构造了一个RmRpcClient，然后执行其init()方法。而RmRpcClient的构造器和init()方法，都会逐层调用父类的构造器与初始化逻辑。
 ````java
     public static void init(String applicationId, String transactionServiceGroup) {
@@ -64,38 +63,44 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
 上述RMClient系列各类之间的关系、逐层调用构造器和init()初始化方法的过程，在下图中进行示意：
 ![RMClient.init简化版流程与主要类之间的关系](../img/in-post/rmclient_relation.jpg)
 
-那么为何要将RMClient设计成这样较为复杂的继承关系呢？其实是为了将各层的职责边界划分清楚，使得各层更专注于特定逻辑处理，并赋予Seata RPC Client更好的扩展性（具体可参考Seata RPC模块重构PR的操刀者乘辉兄的文章[Seata-RPC重构之路]()）
+那么为何要将RMClient设计成这样较为复杂的继承关系呢？其实是为了将各层的职责、边界划分清楚，使得各层可以专注于特定逻辑处理，实现更好的扩展性。（可参考Seata RPC模块重构PR的操刀者乘辉兄的文章[Seata-RPC重构之路]()）
 
-而至于各个构造器以及init()方法中的具体逻辑，在第一次阅读时，大家可能会感觉信息量稍大，这里我把能够表意的时序图画出来供大家梳理，此图也可先跳过不看，在下面讲到几个较重要的类时，再回头来看它们是何时出现并如何与Seata交互的。
+而至于各个构造器以及init()方法中的具体逻辑，因为涉及的类、概念较多，这里我把能够表意的时序图画出来供大家查看和梳理，此图大家也可先跳过不看，在下面我们分析过几个重点类后，再回头来看，这些类是何时登场、相互之间又是如何组装的。
 ![RMClient的初始化流程](../img/in-post/rmclient_initialization.png)
 
-首先我们需要知道，应用侧与协调器侧的通信是借助Netty的Channel（信道）来完成的，因此应用侧建立通信的核心在于Channel的创建。在Seata中，我们通过对象池的方式来创建Channel。
+首先我们需要知道，应用侧与协调器侧的通信是借助Netty的Channel（网络通道）来完成的，因此关键在于Channel的创建。在Seata中，通过池化的方式（借助common-pool中的对象池）方式来创建、管理Channel。
 
-这里我们先对对象池的简单概念和在Seata中的实现类进行进行介绍：
-* GenericKeydObjectPool<K, V>：泛型对象池，核心逻辑为根据入参K来创造类型为V的对象，而对象创建的过程，则委托给其内部持有的抽象工厂。KeyedPoolableObjectFactory<K, V>。
-* NettyPoolableFactory，上述抽象工厂的实现，根据NettyPoolKey，来创建Channel。
-* NettyPoolKey：创建Channel的Key，包含两个信息：
-    - **address**:Channel对应的Server地址
-    - **message**:向Server发送的RPC消息体
+这里我们有必要简要介绍下对象池的简单概念和其在Seata中的实现类：
+* GenericKeydObjectPool<K, V>：KV泛型对象池，提供对所有对象的存取管理，而对象的创建，由其内部的工厂类来完成。
+* KeyedPoolableObjectFactory<K, V>：KV泛型对象工厂，负责池化对象的创建，被对象池持有。
 
-了解了对象池这几个主要概念后，我们其实可以把创建Channel的逻辑简化如下：
-![创建Channel对象过程](../img/in-post/create_channel.jpg)
+以下是Seata中Channel对象池的具体实现：
+* 首先，被池化管理的对象就是Channel。
+* 管理Channel的对象池：GenericKeydObjectPool
+* 创建Channel的工厂：NettyPoolableFactory
+* 工厂创建Channel时依据的Key:NettyPoolKey
+* NettyPoolKey：主要包含两个信息：
+    - **address**:创建Channel时，对应的Server地址
+    - **message**:创建Channel时，向Server发送的RPC消息体
 
 然后我们再看看Seata的几个核心类的主要职责：
-* RpcClientBootstrap：RPC客户端核心引导类，具备启停能力
+* RpcClientBootstrap：RPC客户端核心引导类，持有Netty框架的Bootstrap对象，具备启停能力；具有根据连接地址来获取新Channel的能力，供Channel工厂类调用。
 * NettyClientChannelManager:
   - 初始化并持有GenericKeydObjectPool对象池
   - 与对象池交互，对应用侧Channel进行管理（获取、释放、销毁、缓存等）
 * AbstractRpcRemotingClient
   - 初始化并持有RpcClientBootstrap
-  - 抽象化Client（RM/TM）获取其对应NettyPoolKey的能力，并提供给NettyClientChannelManager
+  - 抽象化应用侧Client（RM/TM）取得各自Channel对应的NettyPoolKey的能力，供NettyClientChannelManager调用
   - 初始化NettyPoolableFactory
 
-  看到这里，大家可以回过头再看看上面的**RMClient的初始化序列图**，对RMClient的初始化、各类之间的组装应该会有一个大致清晰的理解了。
+了解上述概念后，我们可以把Seata中创建Channel的过程简化如下：
+![创建Channel对象过程](../img/in-post/create_channel.jpg)
+
+  看到这里，大家可以回过头再看看上面的**RMClient的初始化序列图**，应该会对RMClient中各类的职责、关系，以及整个初始化过程的意图有一个比较清晰的理解了。
   
   那么，RMClient是何时与Server建立连接的呢？
 
-  在上面序列图和init()方法源码阅读过程中，大家可以发现，很多init()方法都定义了几个线程池用于设定定时任务，Seata应用侧与协调器的连接/重连机制，就是通过定时任务实现的：
+  在参考上面序列图和阅读init()方法源码的过程中，大家会发现，很多init()方法都设定了一些定时任务，而Seata应用侧与协调器的重连（连接）机制，就是通过定时任务的执行来实现的：
 
 ````java
     /**
@@ -115,17 +120,19 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
     }
 ````
 
-这里我们以第一次执行reconnect的时机，看看上面探究的几个类之间是如何协作，完成RMClient与TC的连接的（实际上首次连接可能发生在registerResource的过程中，但流程一致）
+这里我们通过跟踪一次reconnect的执行，看看上面探究的几个类之间是如何协作，完成RMClient与TC的连接的（实际上首次连接可能发生在registerResource的过程中，但流程一致）
 ![RMClient与TC Server连接过程](../img/in-post/rmclient_connect_tcserver.png)
 
 这个图中，大家可以重点关注这几个点：
- AbstractRpcRemotingClient具备执行具体Client获取NettyPoolKey回调的能力，此能力由RMRpcClient/TMRpcClient具体实现，此Key中具有两个主要信息：要链接的Server 地址，以及重连时要发送的RPC消息体
- 构造对象池GenericKeyedObjectPool时传入的NettyPoolableFactory，由在通过对象池获取Channel对象时发挥作用：根据NettyPoolKey来从工厂中构造一个对象（用到了抽象工厂模式）
-RpcClientBootstrap是对Netty原生Bootstrap对象的封装，负责于Netty直接交互，获取新的Channel（同时还有启动。停止的能力）
-在NettyPoolableFactory的makeObject方法中，不仅获取到了新的Channel，还直接使用此Channel发送了重连消息（分別用到了NettyPoolKey的address和message）
-  以上流程，就是Seata客户端初始化时如何与TC Server连接的全过程，具体的细节，大家可以来顺着本文的梳理的脉络和重点详细阅读下源码，相信大家会有更深入的理解和全新的收获！
+* NettyClientChannelManager执行具体AbstractRpcRemotingClient中，获取NettyPoolKey的回调函数（getPoolKeyFunction()）：应用侧的不同Client（RMClient与TMClient），在创建Channel时使用的Key不同，使**两者在重连TC Server时，发送的注册消息不同**，这也是由两者在Seata中扮演的角色不同而决定的：
+  - TMClient：扮演事务管理器角色，创建Channel时，仅向TC发送TM注册请求（RegisterTMRequest）即可。
+  - RMClient：扮演资源管理器角色，需要管理应用侧所有的事务资源，因此在创建Channel时，需要在发送RM注册请求（RegesterRMRequest）前，获取应用侧所有事务资源（Resource）信息，注册至TC Server。
+* 在Channel对象工厂NettyPoolableFactory的makeObject（制造Channel）方法中，使用NettyPoolKey中的两项信息，完成了两项任务：
+    - 使用NettyPoolKey的address创建新的Channel。
+    - 使用NettyPoolKey的message以及新的Channel向TC Server发送注册请求，这就是Client向TC Server的连接（首次执行）或重连（非首次，定时任务驱动执行）请求。
 
-> 后记：有没有同学好奇，在最后RMClient与TC Server建立连接时，Seata时如何完成服务发现，并从配置中心中获取各种数据的呢？<br>
-别急，在下次分享中，我们以Seata应用侧启动过程中的服务发现与获取配置为探究点，为大家剖析Seata的注册与配置中心模块！
+  以上流程，就是Seata应用侧的初始化及其与TC Server协调器侧连接的全过程，更深层次的细节，大家可以来顺着本文梳理出的脉络，详细阅读下源码，相信大家一定会有更深层次的理解和全新的收获！
 
+> 后记：受限于篇幅并保持一篇源码分析文章较为合理的信息量，本文最初所限定的**使用文件作为配置和注册中心**的前提、以及配置中心、注册中心这两个模块，在应用侧初始化并连接TC Server过程中的作用于配合，本文并没有展开讲解。<br>
+不用担心，在下次源码剖析中，我会为大家分析，在RMClient/TM Client与TC Server建立连接之前，Seata应用侧是**如何完成服务发现**，并**从配置中心中获取各种配置**的，我们下次再见！
 
