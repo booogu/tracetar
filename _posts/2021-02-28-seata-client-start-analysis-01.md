@@ -19,10 +19,10 @@ tags:
 ## 盖个帽段
 看过官网README的第一张图片的同学都应该清楚，Seata协调分布式事务的原理便在于通过其**协调器侧**的TC，来与**应用侧**的TM、RM进行各种通信与交互，来保证分布式事务中，多个事务参与者的数据一致性。那么Seata的协调器侧与应用侧之间，是如何建立连接并进行通信的呢？
 
-没错，答案就是Netty，Netty作为一款高性能的RPC通信框架，保证了TC与RM之间的高效通信，关于Netty的详细介绍，大家可以移步至[!Netty介绍](http://sd)进行学习，而本文今天探究的重点，在于**应用侧在启动过程中，如何通过一系列Seata关键模块之间的协作（如RPC、Config/Registry Center、LoadBalance等），来建立与协调器侧之间的通信**
+没错，答案就是Netty，Netty作为一款高性能的RPC通信框架，保证了TC与RM之间的高效通信，本文探究的重点，在于**Seata的应用侧在启动过程中，如何通过一系列Seata关键模块之间的协作（如RPC、Config/Registry Center、LoadBalance等），来建立与协调器侧之间的通信**
 
 ## 给个限定
-Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框架具体实现的，感兴趣的同学可以深入了解下Seata的SPI机制，（可参考[Seata SPI核心原理与设计](http://)）看看Seata是如何通过大量扩展点（Extension），来将组件的具体实现倒置出去，转而依赖抽象接口的，同时，Seata为了更好地融入微服务、云原生等流行架构所衍生出来的生态中，也对多款主流的微服务框架、注册中心、配置中心以及Java开发框架界“扛把子”——SpringBoot等做了主动集成，在保证微内核架构、松耦合、可扩展的同时，又可以很好地与各类组件“打成一片”，使得采用了各种技术栈的环境都可以比较方便地引入Seata。
+Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框架具体实现的，感兴趣的同学可以深入了解下Seata的SPI机制，看看Seata是如何通过大量扩展点（Extension），来将组件的具体实现倒置出去，转而依赖抽象接口的，同时，Seata为了更好地融入微服务、云原生等流行架构所衍生出来的生态中，也对多款主流的微服务框架、注册中心、配置中心以及Java开发框架界“扛把子”——SpringBoot等做了主动集成，在保证微内核架构、松耦合、可扩展的同时，又可以很好地与各类组件“打成一片”，使得采用了各种技术栈的环境都可以比较方便地引入Seata。
 
 本文为了贴近大家**刚引入Seata试用时**的场景，在以下介绍中，选择**应用侧**的限定条件如下：使用**File（文件）作为配置中心与注册中心**，并基于**SpringBoot**启动。
 
@@ -60,13 +60,15 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
         rmRpcClient.init();
     }
 ````
-上述RMClient系列各类之间的关系、逐层调用构造器和init()初始化方法的过程，在下图中进行示意：
-![RMClient.init简化版流程与主要类之间的关系](../img/in-post/rmclient_relation.jpg)
+上述RMClient系列各类之间的关系以及调用构造器和init()初始化方法的过程如下图示意：
+ <!-- <img class="shadow" src="/img/in-post/post-kuaidi-1.jpg" width="260"> -->
+<!-- ![RMClient.init简化版流程与主要类之间的关系](../img/in-post/rmclient_relation.jpg) -->
+![RMClient.init简化版流程与主要类之间的关系](http://booogu.top/img/in-post/rmclient_relation.jpg)
 
 那么为何要将RMClient设计成这样较为复杂的继承关系呢？其实是为了将各层的职责、边界划分清楚，使得各层可以专注于特定逻辑处理，实现更好的扩展性。（可参考Seata RPC模块重构PR的操刀者乘辉兄的文章[Seata-RPC重构之路]()）
 
 而至于各个构造器以及init()方法中的具体逻辑，因为涉及的类、概念较多，这里我把能够表意的时序图画出来供大家查看和梳理，此图大家也可先跳过不看，在下面我们分析过几个重点类后，再回头来看，这些类是何时登场、相互之间又是如何组装的。
-![RMClient的初始化流程](../img/in-post/rmclient_initialization.png)
+![RMClient的初始化流程](http://booogu.top/img/in-post/rmclient_initialization.png)
 
 首先我们需要知道，应用侧与协调器侧的通信是借助Netty的Channel（网络通道）来完成的，因此关键在于Channel的创建。在Seata中，通过池化的方式（借助common-pool中的对象池）方式来创建、管理Channel。
 
@@ -94,7 +96,7 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
   - 初始化NettyPoolableFactory
 
 了解上述概念后，我们可以把Seata中创建Channel的过程简化如下：
-![创建Channel对象过程](../img/in-post/create_channel.jpg)
+![创建Channel对象过程](http://booogu.top/img/in-post/create_channel.jpg)
 
   看到这里，大家可以回过头再看看上面的**RMClient的初始化序列图**，应该会对RMClient中各类的职责、关系，以及整个初始化过程的意图有一个比较清晰的理解了。
   
@@ -121,7 +123,7 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
 ````
 
 这里我们通过跟踪一次reconnect的执行，看看上面探究的几个类之间是如何协作，完成RMClient与TC的连接的（实际上首次连接可能发生在registerResource的过程中，但流程一致）
-![RMClient与TC Server连接过程](../img/in-post/rmclient_connect_tcserver.png)
+![RMClient与TC Server连接过程](http://booogu.top/img/in-post/rmclient_connect_tcserver.png)
 
 这个图中，大家可以重点关注这几个点：
 * NettyClientChannelManager执行具体AbstractRpcRemotingClient中，获取NettyPoolKey的回调函数（getPoolKeyFunction()）：应用侧的不同Client（RMClient与TMClient），在创建Channel时使用的Key不同，使**两者在重连TC Server时，发送的注册消息不同**，这也是由两者在Seata中扮演的角色不同而决定的：
@@ -129,7 +131,7 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
   - RMClient：扮演资源管理器角色，需要管理应用侧所有的事务资源，因此在创建Channel时，需要在发送RM注册请求（RegesterRMRequest）前，获取应用侧所有事务资源（Resource）信息，注册至TC Server。
 * 在Channel对象工厂NettyPoolableFactory的makeObject（制造Channel）方法中，使用NettyPoolKey中的两项信息，完成了两项任务：
     - 使用NettyPoolKey的address创建新的Channel。
-    - 使用NettyPoolKey的message以及新的Channel向TC Server发送注册请求，这就是Client向TC Server的连接（首次执行）或重连（非首次，定时任务驱动执行）请求。
+    - 使用NettyPoolKey的message以及新的Channel向TC Server发送注册请求，这就是Client向TC Server的连接（首次执行）或重连（非首次，由定时任务驱动执行）请求。
 
   以上流程，就是Seata应用侧的初始化及其与TC Server协调器侧连接的全过程，更深层次的细节，大家可以来顺着本文梳理出的脉络，详细阅读下源码，相信大家一定会有更深层次的理解和全新的收获！
 
