@@ -1,8 +1,8 @@
 ---
 layout:     post
 comments: true
-title:      Seata客户端启动过程剖析（一）
-subtitle:   RM/TM与TC建立连接的过程
+title:      Seata应用侧启动过程剖析（一）
+subtitle:   RM & TM如何与TC建立连接
 date:       2021-02-28 21:08:00
 author:     "Booogu"
 # header-style: text
@@ -12,22 +12,16 @@ tags:
     - Seata
 ---
 
-> “刚上手Seata不久，对其各个模块了解还不够深入？ <br>
-想深入研究下Seata源码但却还未付诸实践？<br>
+> “刚上手Seata，对其各个模块了解还不够深入？ <br>
+想深入研究Seata源码，却还未付诸实践？<br>
 想探究下在集成Seata后，自己的应用在启动过程中“偷偷”干了些啥？<br>
-如果你有上述问题，那么今天这篇文章，就是为你量身打造的~
+想学习Seata作为一款优秀开源框架蕴含的设计理念和最佳实践？<br>
+如果你有上述任何想法，那么今天这篇文章，就是为你量身打造的~
 
-## 盖个帽段
+## 前言
 看过官网README的第一张图片的同学都应该清楚，Seata协调分布式事务的原理便在于通过其**协调器侧**的TC，来与**应用侧**的TM、RM进行各种通信与交互，来保证分布式事务中，多个事务参与者的数据一致性。那么Seata的协调器侧与应用侧之间，是如何建立连接并进行通信的呢？
 
-没错，答案就是Netty，Netty作为一款高性能的RPC通信框架，保证了TC与RM之间的高效通信，关于Netty的详细介绍，本文不再展开，今天我们探究的重点，在于**应用侧在启动过程中，如何通过一系列Seata关键模块之间的协作（如RPC、Config/Registry Center、LoadBalance等），来建立与协调器侧之间的通信**
-
-## 给个限定
-Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框架具体实现的，感兴趣的同学可以深入了解下Seata的SPI机制，看看Seata是如何通过大量扩展点（Extension），来将组件的具体实现倒置出去，转而依赖抽象接口的，同时，Seata为了更好地融入微服务、云原生等流行架构所衍生出来的生态中，也对多款主流的微服务框架、注册中心、配置中心以及Java开发框架界“扛把子”——SpringBoot等做了主动集成，在保证微内核架构、松耦合、可扩展的同时，又可以很好地与各类组件“打成一片”，使得采用了各种技术栈的环境都可以比较方便地引入Seata。
-
-本文为了贴近大家**刚引入Seata试用时**的场景，在以下介绍中，选择**应用侧**的限定条件如下：使用**File（文件）作为配置中心与注册中心**，并基于**SpringBoot**启动。
-
-有了这个限定条件，接下来就让我们深入Seata源码，一探究竟吧。
+没错，答案就是Netty，Netty作为一款高性能的RPC通信框架，保证了TC与RM之间的高效通信，关于Netty的详细介绍，本文不再展开，今天我们探究的重点，在于**应用侧在启动过程中，如何通过一系列Seata关键模块之间的协作（如RPC、Config/Registry Center等），来建立与协调器侧之间的通信**
 
 ## 从GlobalTransactionScanner说起
 我们知道Seata提供了多个开发期注解，比如用于开启分布式事务的@GlobalTransactional、用于声明TCC两阶段服务的@TwoPhraseBusinessAction等，它们都是基于Spring AOP的拦截器（Interceptor）机制，对使用了注解的Bean方法分配对应的拦截器进行增强，来完成对应的处理逻辑。而Seata中GlobalTransactionScanner这个Spring Bean，就承载着为各个注解分配对应的拦截器的职责，从其Scanner的命名，我们也不难推断出，它是为了在Spring应用启动过程中，对与全局事务（GlobalTransactionScanner）相关的Bean进行扫描、处理的。
@@ -63,8 +57,6 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
     }
 ```
 上述RMClient系列各类之间的关系以及调用构造器和init()初始化方法的过程如下图示意：
- <!-- <img class="shadow" src="/img/in-post/post-kuaidi-1.jpg" width="260"> -->
-<!-- ![RMClient.init简化版流程与主要类之间的关系](../img/in-post/rmclient_relation.jpg) -->
 ![RMClient.init简化版流程与主要类之间的关系](http://booogu.top/img/in-post/rmclient_relation.jpg)
 
 
@@ -145,6 +137,6 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
 
 更深层次的细节，建议大家再根据本文梳理的脉络和提到的几个重点，细致地阅读下源码，相信定会有更深层次的理解和全新的收获！
 
-> 后记：考虑到篇幅以及保持一篇源码分析文章较为合适的信息量，本文最初限定的**使用文件作为配置和注册中心**的前提，以及配置中心、注册中心这两个模块在应用侧初始化并连接TC Server的过程中是如何配合的，本文没有展开讲解。<br>
-在下篇源码剖析中，我会为大家分析，在RMClient/TM Client与TC Server建立连接之前，Seata应用侧是**如何完成服务发现**，并**从配置中心中获取各种配置**的，敬请期待！
+> 后记：考虑到篇幅以及保持一篇源码分析文章较为合适的信息量，本文前言中所说的**配置、注册等模块协作配合**并没有在文章中展开和体现。<br>
+在下篇源码剖析中，我会以**配置中心**和**注册中心**为重点，为大家分析，在RMClient/TM Client与TC Server建立连接之前，Seata应用侧是**如何通过服务发现**找到TC Server、如何**从配置模块获取各种信息**的，敬请期待！
 

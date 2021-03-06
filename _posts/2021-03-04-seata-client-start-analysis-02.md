@@ -1,7 +1,7 @@
 ---
 layout:     post
 comments: true
-title:      <code>WIP</code>Seata客户端启动过程剖析（二）
+title:      Seata应用侧启动过程剖析（二）
 subtitle:   注册中心 | 配置中心
 date:       2021-03-04 1:35:01
 author:     "Booogu"
@@ -11,21 +11,21 @@ tags:
     - Seata
 ---
 
-
-> “刚上手Seata不久，对其各个模块了解还不够深入？ <br>
-想深入研究下Seata源码但却还未付诸实践？<br>
+> “刚上手Seata，对其各个模块了解还不够深入？ <br>
+想深入研究Seata源码，却还未付诸实践？<br>
 想探究下在集成Seata后，自己的应用在启动过程中“偷偷”干了些啥？<br>
-如果你有上述问题，那么今天这篇文章，就是为你量身打造的~
+想学习Seata作为一款优秀开源框架蕴含的设计理念和最佳实践？<br>
+如果你有上述任何想法，那么今天这篇文章，就是为你量身打造的~
 
 ## 前言
-在Seata的应用侧（RM、TM）启动过程中，首先要做的就是与协调器侧（TC）建立通信，这是Seata能够协调分布式事务的必要前提，那么Seata在完成应用侧初始化以及与TC建立连接时，是**如何找到TC事务协调器的集群地址**的，又是**如何获取启动过程中的多种配置项**的呢？这就是本文探究的重点。
+在Seata的应用侧（RM、TM）启动过程中，首先要做的就是与协调器侧（TC）建立通信，这是Seata能够完成分布式事务协调的前提，那么Seata在完成应用侧初始化以及与TC建立连接的过程中，是**如何找到TC事务协调器的集群和地址**的？又是**如何从配置模块中获取各种配置信息**的呢？这正是本文要探究的重点。
 
 ## 给个限定
 Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框架具体实现的，感兴趣的同学可以深入了解下Seata的SPI机制，看看Seata是如何通过大量扩展点（Extension），来将组件的具体实现倒置出去，转而依赖抽象接口的，同时，Seata为了更好地融入微服务、云原生等流行架构所衍生出来的生态中，也基于SPI机制对多款主流的微服务框架、注册中心、配置中心以及Java开发框架界“扛把子”——SpringBoot等做了主动集成，在保证微内核架构、松耦合、可扩展的同时，又可以很好地与各类组件“打成一片”，使得采用了各种技术栈的环境都可以比较方便地引入Seata。
 
 本文为了贴近大家**刚引入Seata试用时**的场景，在以下介绍中，选择**应用侧**的限定条件如下：使用**File（文件）作为配置中心与注册中心**，并基于**SpringBoot**启动。
 
-有了这个限定条件，接下来就让我们深入Seata，一探究竟吧。
+有了这个限定条件，接下来就让我们深入Seata源码，一探究竟吧。
 
 ## 多模块交替协作的RM/TM初始化过程
 在[ Seata客户端启动过程剖析（一）](http://booogu.top/2021/02/28/seata-client-start-analysis-01/)中，我们主要分析了Seata应用侧TM与RM的初始化、以及应用侧如何创建Netty Channel并向TC Server发送注册请求的过程。除此之外，在RM初始化过程中，Seata的其他多个模块（注册中心、配置中心、负载均衡）也都纷纷登场，相互协作，共同完成了连接TC Server的过程。
@@ -77,7 +77,7 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
                                          .collect(Collectors.toList());
     }
 ```
-#### 用哪个注册中心？**Seata配置文件**给出答案
+#### 用哪个注册中心？**Seata元配置文件**给出答案
 上面已提到，Seata支持多种注册中心的实现，那么，Seata首先需要从一个地方先获取到“注册中心的类型”这个信息。
 
 从哪里获取呢？Seata设计了一个“配置文件”用于存放其框架内所用组件的一些基本信息，我更愿意称这个配置文件为 **『元配置文件』**，这是因为它包含的信息，其实是“配置的配置”，也即“元”的概念，大家可以对比数据库表中的信息，和数据库表本身结构的信息（表数据和表元数据）来理解。
@@ -141,5 +141,163 @@ config {
 ```
 可以看到，注册中心的类型，是从ConfigurationFactory.CURRENT_FILE_INSTANCE中获取的，而这个CURRENT_FILE_INSTANCE，就是我们所说的，Seata框架中持有的**元配置文件实例**
 
+那么我们就来看一下，元配置文件的初始化过程，
+首次获取静态字段CURRENT_FILE_INSTANCE时，将触发ConfigurationFactory类的初始化：
+```java
+    //ConfigurationFactory类的静态块
+    static {
+        load();
+    }
 
-Seata通过内置的元配置文件，帮助大家在刚接入Seata时，采用默认的文件配置、文件注册的方式，实现了对Seata-Server的直连，而且与SpringBoot进行了集成，了解这部分之后，其实是大家对Seata进行扩展的一个基础。
+     /**
+     * load()方法中，加载Seata的元配置文件
+     */   
+    private static void load() {
+        //元配置文件的名称，支持通过系统变量、环境变量扩展
+        String seataConfigName = System.getProperty(SYSTEM_PROPERTY_SEATA_CONFIG_NAME);
+        if (seataConfigName == null) {
+            seataConfigName = System.getenv(ENV_SEATA_CONFIG_NAME);
+        }
+        if (seataConfigName == null) {
+            seataConfigName = REGISTRY_CONF_DEFAULT;
+        }
+        String envValue = System.getProperty(ENV_PROPERTY_KEY);
+        if (envValue == null) {
+            envValue = System.getenv(ENV_SYSTEM_KEY);
+        }
+        //根据元配置文件名称，创建一个实现了Configuration接口的文件配置实例
+        Configuration configuration = (envValue == null) ? new FileConfiguration(seataConfigName,
+                false) : new FileConfiguration(seataConfigName + "-" + envValue, false);
+        Configuration extConfiguration = null;
+        //通过SPI加载，来判断是否存在扩展配置提供者
+        //当应用侧使用seata-spring-boot-starer时，将通过SpringBootConfigurationProvider作为扩展配置提供者，这时当获取元配置项时，将不再从file.conf（默认）中获取，而是从application.properties/application.yaml中获取
+        try {
+            //通过ExtConfigurationProvider的provide方法，将原有的Configuration实例替换为扩展配置的实例
+            extConfiguration = EnhancedServiceLoader.load(ExtConfigurationProvider.class).provide(configuration);
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("load Configuration:{}", extConfiguration == null ? configuration.getClass().getSimpleName()
+                        : extConfiguration.getClass().getSimpleName());
+            }
+        } catch (EnhancedServiceNotFoundException ignore) {
+
+        } catch (Exception e) {
+            LOGGER.error("failed to load extConfiguration:{}", e.getMessage(), e);
+        }
+        //存在扩展配置，则返回扩展配置实例，否则返回文件配置实例
+        CURRENT_FILE_INSTANCE = extConfiguration == null ? configuration : extConfiguration;
+    }
+```
+关于load()方法的完整调用栈，我们可以构造出完整的序列图如下：
+![Seata元配置文件的加载过程](http://booogu.top/img/in-post/seata_config_initialization.png)
+
+上面的序列图中，大家可以关注以下几点：
+- Seata元配置文件的名称支持扩展
+- Seata元配置文件共支持3种后缀：yaml/properties/conf，在创建元配置文件实例时，会依次尝试匹配
+- Seata的配置接口为Configuration，具有配置的增删改查等基本能力，各种配置中心均需实现此接口，Seata元配置文件就是其一种实现（文件配置：FileConfiguration）
+```java
+/**
+ * Seata配置能力接口
+ * package：io.seata.config
+ */
+
+public interface Configuration {
+    /**
+     * Gets short.
+     *
+     * @param dataId       the data id
+     * @param defaultValue the default value
+     * @param timeoutMills the timeout mills
+     * @return the short
+     */
+    short getShort(String dataId, int defaultValue, long timeoutMills);
+
+    //以下内容略，主要配置信息的包括增删改查
+}
+```
+- Seata提供了一个类型为ExtConfigurationProvider的扩展点，开放了对配置实现的扩展能力，它具有一个provide()方法，接收原有的Configuration，返回一个全新的Configuration，此接口方法的形式决定了，一般可以采用静态代理、动态代理、装饰器等设计模式来实现此方法，实现对原有Configuration的扩展
+```java
+/**
+ * Seata扩展配置提供者接口
+ * package：io.seata.config
+ */
+public interface ExtConfigurationProvider {
+    /**
+     * provide a AbstractConfiguration implementation instance
+     * @param originalConfiguration
+     * @return configuration
+     */
+    Configuration provide(Configuration originalConfiguration);
+}
+```
+- 当应用侧使用了seata-spring-boot-starter时，将采用SpringBootConfigurationProvider作为扩展配置提供者，其provide方法通过动态字节码生成（CGLIB）来为原FileConfiguration实例创建了一个动态代理，拦截了所有以"get"开头的方法，以实现从application.properties/application.yaml中获取元配置项。
+
+    关于SpringBootConfigurationProvider的具体实现，本文只介绍了思路，不再展开分析，请读者自行阅读源码，这也仅是ExtConfigurationProvider接口在SpringBoot框架下的一种实现方式，从Configuration可扩展、可替换的角度思考，Seata正是通过ExtConfigurationProvider这样一个扩展点，为多种配置的实现提供了一个广阔的舞台，允许配置的多种实现、接入方案。
+
+经历过上述加载流程后，如果我们**没有使用额外的扩展配置提供者**，那么我们将从Seata元配置文件种获取到注册中心的类型为file，同时创建了一个文件注册中心实例：FileRegistryServiceImpl（当其他类型的注册中心时，将通过SPI获取其他类型的注册中心实例）
+#### 从注册中心获取TC Server地址
+获取注册中心的实例后，需要执行lookup()方法（RegistryFactory.getInstance().**lookup(transactionServiceGroup)**），FileRegistryServiceImpl.lookup()的实现如下：
+```java
+    /**
+     * 根据事务分组名称，获取TC Server可用地址列表
+     * FileRegistryServiceImpl.lookup()
+     * package：io.seata.discovery.registry
+     */
+    @Override
+    public List<InetSocketAddress> lookup(String key) throws Exception {
+        //获取TC Server集群名称
+        String clusterName = getServiceGroup(key);
+        if (clusterName == null) {
+            return null;
+        }
+        //从配置中心中获取TC集群中所有可用的Server地址
+        String endpointStr = CONFIG.getConfig(
+            PREFIX_SERVICE_ROOT + CONFIG_SPLIT_CHAR + clusterName + POSTFIX_GROUPLIST);
+        if (StringUtils.isNullOrEmpty(endpointStr)) {
+            throw new IllegalArgumentException(clusterName + POSTFIX_GROUPLIST + " is required");
+        }
+        //将地址封装为InetSocketAddress并返回
+        String[] endpoints = endpointStr.split(ENDPOINT_SPLIT_CHAR);
+        List<InetSocketAddress> inetSocketAddresses = new ArrayList<>();
+        for (String endpoint : endpoints) {
+            String[] ipAndPort = endpoint.split(IP_PORT_SPLIT_CHAR);
+            if (ipAndPort.length != 2) {
+                throw new IllegalArgumentException("endpoint format should like ip:port");
+            }
+            inetSocketAddresses.add(new InetSocketAddress(ipAndPort[0], Integer.parseInt(ipAndPort[1])));
+        }
+        return inetSocketAddresses;
+    }
+
+    /**
+     * 注册中心接口中的default方法
+     * package：io.seata.discovery.registry
+     */
+    default String  getServiceGroup(String key) {
+        key = PREFIX_SERVICE_ROOT + CONFIG_SPLIT_CHAR + PREFIX_SERVICE_MAPPING + key;
+        //在配置缓存中，添加事务分组名称变化监听事件
+        if (!SERVICE_GROUP_NAME.contains(key)) {
+            ConfigurationCache.addConfigListener(key);
+            SERVICE_GROUP_NAME.add(key);
+        }
+        //从配置中心中获取事务分组对应的TC集群名称
+        return ConfigurationFactory.getInstance().getConfig(key);
+    }
+```
+可以看到，代码逻辑与第一节中图**Seata事务分组与建立连接的关系**中的流程相符合，
+这时，注册中心将需要**配置中心的协助**，来获取事务分组对应的集群名称、并查找集群中可用的服务地址。
+### 从**配置中心**获取TC集群名称
+#### 配置中心的初始化
+配置中心的初始化（在ConfigurationFactory.buildConfiguration()），与注册中心的初始化流程类似，都是先从**元配置文件**中获取配置中心的类型等信息，然后初始化一个具体的配置中心实例，有了之前的分析基础，这里不再赘述，请读者自行阅读。
+#### 获取配置项的值
+获取到配置项值后，在上述代码段的两个方法lookup()以及getServiceGroup()中，都从配置中心中获取的配置项的值：
+- getServiceGroup()是RegistryServer接口中的default方法，是所有注册中心的公共实现，即任何配置中心，都需要通过配置中心来根据事务分组名称来获取TC集群名称
+- lookup()是需要由不同注册中心具体实现的方法，在文件注册中心中，其实是一种直连TC Server的情况，其特殊点在于**TC Server的地址是写死在配置中的**的（正常的微服务环境下，此信息应存于注册中心中），因此FileRegistryServiceImpl.lookup()方法，是从配置中心中获取的TC集群中Server的地址信息。
+### 负载均衡
+经过上述环节配置中心、注册中心的“友好协作”,现在我们已经获取到了当前应用侧可用的所有TC Server的地址，那么在发送真正的请求之前，还需要做的当然就是通过特定的负载均衡策略，从所有地址中选择一个，这部分源码比较简单，就不带着大家分析了。
+> 关于负载均衡的源码，大家可以阅读AbstractNettyRemotingClient.doSelect()，因本文开头选取的代码段是RMClient/TMClient的重连方法，所有获取到的Server地址，都会通过遍历依次建立与TC的连接，因此这里不需要做负载均衡。
+
+以上就是Seata应用侧在启动过程中，注册中心与配置中心这两个关键模块之间的协作关系与工作流程，欢迎共同探讨、学习！
+
+> 后记：本文及其上篇[ Seata客户端启动过程剖析（一）](http://booogu.top/2021/02/28/seata-client-start-analysis-01/)，是本人撰写的首批技术博客，将上手Seata时，个人认为Seata中较为复杂、需要研究和弄通的部分源码进行了分析和记录。在写作的文风和笔法上尚不成体系，在此欢迎各位读者提出各种改进建议，谢谢！
+
+
