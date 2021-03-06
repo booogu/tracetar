@@ -51,7 +51,7 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
 ## RM & TM 的初始化流程
 这里，我们以RMClient.init()为例说明，TMClient的初始化过程亦同理。
 查看RMClient#init()的源码，我们发现，RMClient先构造了一个RmRpcClient，然后执行其init()方法。而RmRpcClient的构造器和init()方法，都会逐层调用父类的构造器与初始化逻辑。
-````java
+```java
     public static void init(String applicationId, String transactionServiceGroup) {
         //① 首先从RmRpcClient类开始，依次调用父类的构造器
         RmRpcClient rmRpcClient = RmRpcClient.getInstance(applicationId, transactionServiceGroup);
@@ -60,7 +60,7 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
         //② 然后从RmRpcClient类开始，依次调用父类的init()
         rmRpcClient.init();
     }
-````
+```
 上述RMClient系列各类之间的关系以及调用构造器和init()初始化方法的过程如下图示意：
  <!-- <img class="shadow" src="/img/in-post/post-kuaidi-1.jpg" width="260"> -->
 <!-- ![RMClient.init简化版流程与主要类之间的关系](../img/in-post/rmclient_relation.jpg) -->
@@ -105,7 +105,7 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
 
   在参考上面序列图和阅读init()方法源码的过程中，大家会发现，很多init()方法都设定了一些定时任务，而Seata应用侧与协调器的重连（连接）机制，就是通过定时任务的执行来实现的：
 
-````java
+```appscript
     /**
      * Class io.seata.core.rpc.netty.AbstractRpcRemotingClient
      */
@@ -121,7 +121,8 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
         }, SCHEDULE_INTERVAL_MILLS, SCHEDULE_INTERVAL_MILLS, TimeUnit.SECONDS);
         //以下代码略
     }
-````
+```
+
 
 这里我们通过跟踪一次reconnect的执行，看看上面探究的几个类之间是如何协作，完成RMClient与TC的连接的（实际上首次连接可能发生在registerResource的过程中，但流程一致）
 ![RMClient与TC Server连接过程](http://booogu.top/img/in-post/rmclient_connect_tcserver.png)
