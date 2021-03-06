@@ -1,11 +1,12 @@
 ---
 layout:     post
 comments: true
-title:      <code>WIP</code>Seata客户端启动过程剖析（一）
+title:      Seata客户端启动过程剖析（一）
 subtitle:   RM/TM与TC建立连接的过程
 date:       2021-02-28 21:08:00
 author:     "Booogu"
-header-style: text
+# header-style: text
+header-img: "img/seata.png"
 catalog: true
 tags:
     - Seata
@@ -51,7 +52,7 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
 这里，我们以RMClient.init()为例说明，TMClient的初始化过程亦同理。
 ### 类关系的设计
 查看RMClient#init()的源码，我们发现，RMClient先构造了一个RmRpcClient，然后执行其init()方法。而RmRpcClient的构造器和init()方法，都会逐层调用父类的构造器与初始化逻辑。
-````java
+```java
     public static void init(String applicationId, String transactionServiceGroup) {
         //① 首先从RmRpcClient类开始，依次调用父类的构造器
         RmRpcClient rmRpcClient = RmRpcClient.getInstance(applicationId, transactionServiceGroup);
@@ -60,8 +61,9 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
         //② 然后从RmRpcClient类开始，依次调用父类的init()
         rmRpcClient.init();
     }
-````
-上述RMClient系列各类之间的关系、逐层调用构造器和init()初始化方法的过程，在下图中进行示意：
+```
+上述RMClient系列各类之间的关系以及调用构造器和init()初始化方法的过程如下图示意：
+ <!-- <img class="shadow" src="/img/in-post/post-kuaidi-1.jpg" width="260"> -->
 <!-- ![RMClient.init简化版流程与主要类之间的关系](../img/in-post/rmclient_relation.jpg) -->
 ![RMClient.init简化版流程与主要类之间的关系](http://booogu.top/img/in-post/rmclient_relation.jpg)
 
@@ -70,7 +72,6 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
 
 ### 初始化的完整流程
 而至于各个构造器以及init()方法中的具体逻辑，因为涉及的类、概念较多，这里我把能够表意的时序图画出来供大家查看和梳理，此图大家也可先跳过不看，在下面我们分析过几个重点类后，再回头来看，这些类是何时登场、相互之间又是如何组装的。
-<!-- ![RMClient的初始化流程](../img/in-post/rmclient_initialization.png) -->
 ![RMClient的初始化流程](http://booogu.top/img/in-post/rmclient_initialization.png)
 
 ### 抓住核心——Channel的创建
@@ -110,7 +111,7 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
 
 在参考上面序列图和阅读init()方法源码的过程中，大家会发现，很多init()方法都设定了一些定时任务，而Seata应用侧与协调器的重连（连接）机制，就是通过定时任务的执行来实现的：
 
-````java
+```appscript
     /**
      * Class io.seata.core.rpc.netty.AbstractRpcRemotingClient
      */
@@ -126,10 +127,10 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
         }, SCHEDULE_INTERVAL_MILLS, SCHEDULE_INTERVAL_MILLS, TimeUnit.SECONDS);
         //以下代码略
     }
-````
+```
+
 
 这里我们通过跟踪一次reconnect的执行，看看上面探究的几个类之间是如何协作，完成RMClient与TC的连接的（实际上首次连接可能发生在registerResource的过程中，但流程一致）
-<!-- ![RMClient与TC Server连接过程](../img/in-post/rmclient_connect_tcserver.png) -->
 ![RMClient与TC Server连接过程](http://booogu.top/img/in-post/rmclient_connect_tcserver.png)
 
 这个图中，大家可以重点关注这几个点：
@@ -138,12 +139,12 @@ Seata作为一款中间件级的底层组件，是很谨慎地引入第三方框
   - RMClient：扮演资源管理器角色，需要管理应用侧所有的事务资源，因此在创建Channel时，需要在发送RM注册请求（RegesterRMRequest）前，获取应用侧所有事务资源（Resource）信息，注册至TC Server。
 * 在Channel对象工厂NettyPoolableFactory的makeObject（制造Channel）方法中，使用NettyPoolKey中的两项信息，完成了两项任务：
     - 使用NettyPoolKey的address创建新的Channel。
-    - 使用NettyPoolKey的message以及新的Channel向TC Server发送注册请求，这就是Client向TC Server的连接（首次执行）或重连（非首次，定时任务驱动执行）请求。
+    - 使用NettyPoolKey的message以及新的Channel向TC Server发送注册请求，这就是Client向TC Server的连接（首次执行）或重连（非首次，由定时任务驱动执行）请求。
 
 以上内容，就是关于Seata应用侧的初始化及其与TC Server协调器侧建立连接的全过程分析。
 
 更深层次的细节，建议大家再根据本文梳理的脉络和提到的几个重点，细致地阅读下源码，相信定会有更深层次的理解和全新的收获！
 
-> 后记：受限于篇幅并保持一篇源码分析文章较为合理的信息量，本文最初所限定的**使用文件作为配置和注册中心**的前提、以及配置中心、注册中心这两个模块，在应用侧初始化并连接TC Server过程中的作用于配合，本文并没有展开讲解。<br>
-不用担心，在下次源码剖析中，我会为大家分析，在RMClient/TM Client与TC Server建立连接之前，Seata应用侧是**如何完成服务发现**，并**从配置中心中获取各种配置项**的，敬请期待！
+> 后记：考虑到篇幅以及保持一篇源码分析文章较为合适的信息量，本文最初限定的**使用文件作为配置和注册中心**的前提，以及配置中心、注册中心这两个模块在应用侧初始化并连接TC Server的过程中是如何配合的，本文没有展开讲解。<br>
+在下篇源码剖析中，我会为大家分析，在RMClient/TM Client与TC Server建立连接之前，Seata应用侧是**如何完成服务发现**，并**从配置中心中获取各种配置**的，敬请期待！
 
