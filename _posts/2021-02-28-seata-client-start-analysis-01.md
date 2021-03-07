@@ -28,6 +28,10 @@ tags:
 
 除此之外，应用侧RPC客户端（TMClient、RMClient）初始化、与TC建立连接的流程，也是在GlobalTransactionScanner#afterPropertiesSet()中发起的：
 ````java
+    /**
+     * package：io.seata.spring.annotation
+     * class：GlobalTransactionScanner
+     */
     @Override
     public void afterPropertiesSet() {
         if (disableGlobalTransaction) {
@@ -45,15 +49,19 @@ tags:
 ## RM & TM 的初始化与连接过程
 这里，我们以RMClient.init()为例说明，TMClient的初始化过程亦同理。
 ### 类关系的设计
-查看RMClient#init()的源码，我们发现，RMClient先构造了一个RmRpcClient，然后执行其init()方法。而RmRpcClient的构造器和init()方法，都会逐层调用父类的构造器与初始化逻辑。
+查看RMClient#init()的源码，我们发现，RMClient先构造了一个RmNettyRemotingClient，然后执行其init()方法。而RmNettyRemotingClient的构造器和init()方法，都会逐层调用父类的构造器与初始化逻辑。
 ```java
+    /**
+     * package：io.seata.rm
+     * class：RMClient
+     */
     public static void init(String applicationId, String transactionServiceGroup) {
-        //① 首先从RmRpcClient类开始，依次调用父类的构造器
-        RmRpcClient rmRpcClient = RmRpcClient.getInstance(applicationId, transactionServiceGroup);
-        rmRpcClient.setResourceManager(DefaultResourceManager.get());
-        rmRpcClient.setClientMessageListener(new RmMessageListener(DefaultRMHandler.get(), rmRpcClient));
-        //② 然后从RmRpcClient类开始，依次调用父类的init()
-        rmRpcClient.init();
+        //① 首先从RmNettyRemotingClient类开始，依次调用父类的构造器        
+        RmNettyRemotingClient rmNettyRemotingClient = RmNettyRemotingClient.getInstance(applicationId, transactionServiceGroup);
+        rmNettyRemotingClient.setResourceManager(DefaultResourceManager.get());
+        rmNettyRemotingClient.setTransactionMessageHandler(DefaultRMHandler.get());
+        //② 然后从RmNettyRemotingClient类开始，依次调用父类的init()
+        rmNettyRemotingClient.init();
     }
 ```
 上述RMClient系列各类之间的关系以及调用构造器和init()初始化方法的过程如下图示意：
@@ -87,13 +95,12 @@ tags:
 * NettyClientChannelManager:
   - 初始化并持有GenericKeydObjectPool对象池
   - 与对象池交互，对应用侧Channel进行管理（获取、释放、销毁、缓存等）
-* AbstractRpcRemotingClient
+* AbstractNettyRemotingClient
   - 初始化并持有RpcClientBootstrap
   - 抽象化应用侧Client（RM/TM）取得各自Channel对应的NettyPoolKey的能力，供NettyClientChannelManager调用
   - 初始化NettyPoolableFactory
 
 了解上述概念后，我们可以把Seata中创建Channel的过程简化如下：
-<!-- ![创建Channel对象过程](../img/in-post/create_channel.jpg) -->
 ![创建Channel对象过程](http://booogu.top/img/in-post/create_channel.jpg)
 
 看到这里，大家可以回过头再看看上面的**RMClient的初始化序列图**，应该会对RMClient中各类的职责、关系，以及整个初始化过程的意图有一个比较清晰的理解了。
@@ -103,21 +110,29 @@ tags:
 
 在参考上面序列图和阅读init()方法源码的过程中，大家会发现，很多init()方法都设定了一些定时任务，而Seata应用侧与协调器的重连（连接）机制，就是通过定时任务的执行来实现的：
 
-```appscript
+```java
     /**
-     * Class io.seata.core.rpc.netty.AbstractRpcRemotingClient
+     * package：io.seata.core.rpcn.netty
+     * class：AbstractNettyRemotingClient
      */
     public void init() {
-        clientBootstrap.setChannelHandlers(new ClientHandler());
-        clientBootstrap.start();
         //设置定时器，定时重连TC Server
         timerExecutor.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
                 clientChannelManager.reconnect(getTransactionServiceGroup());
             }
-        }, SCHEDULE_INTERVAL_MILLS, SCHEDULE_INTERVAL_MILLS, TimeUnit.SECONDS);
-        //以下代码略
+        }, SCHEDULE_DELAY_MILLS, SCHEDULE_INTERVAL_MILLS, TimeUnit.MILLISECONDS);
+        if (NettyClientConfig.isEnableClientBatchSendRequest()) {
+            mergeSendExecutorService = new ThreadPoolExecutor(MAX_MERGE_SEND_THREAD,
+                MAX_MERGE_SEND_THREAD,
+                KEEP_ALIVE_TIME, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(),
+                new NamedThreadFactory(getThreadPrefix(), MAX_MERGE_SEND_THREAD));
+            mergeSendExecutorService.submit(new MergedSendRunnable());
+        }
+        super.init();
+        clientBootstrap.start();
     }
 ```
 
@@ -126,7 +141,7 @@ tags:
 ![RMClient与TC Server连接过程](http://booogu.top/img/in-post/rmclient_connect_tcserver.png)
 
 这个图中，大家可以重点关注这几个点：
-* NettyClientChannelManager执行具体AbstractRpcRemotingClient中，获取NettyPoolKey的回调函数（getPoolKeyFunction()）：应用侧的不同Client（RMClient与TMClient），在创建Channel时使用的Key不同，使**两者在重连TC Server时，发送的注册消息不同**，这也是由两者在Seata中扮演的角色不同而决定的：
+* NettyClientChannelManager执行具体AbstractNettyRemotingClient中，获取NettyPoolKey的回调函数（getPoolKeyFunction()）：应用侧的不同Client（RMClient与TMClient），在创建Channel时使用的Key不同，使**两者在重连TC Server时，发送的注册消息不同**，这也是由两者在Seata中扮演的角色不同而决定的：
   - TMClient：扮演事务管理器角色，创建Channel时，仅向TC发送TM注册请求（RegisterTMRequest）即可。
   - RMClient：扮演资源管理器角色，需要管理应用侧所有的事务资源，因此在创建Channel时，需要在发送RM注册请求（RegesterRMRequest）前，获取应用侧所有事务资源（Resource）信息，注册至TC Server。
 * 在Channel对象工厂NettyPoolableFactory的makeObject（制造Channel）方法中，使用NettyPoolKey中的两项信息，完成了两项任务：
