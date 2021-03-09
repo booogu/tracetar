@@ -302,5 +302,3 @@ public interface ExtConfigurationProvider {
 
 > 后记：本文及其上篇[ Seata客户端启动过程剖析（一）](http://booogu.top/2021/02/28/seata-client-start-analysis-01/)，是本人撰写的首批技术博客，将上手Seata时，个人认为Seata中较为复杂、需要研究和弄通的部分源码进行了分析和记录。
 在此欢迎各位读者提出各种改进建议，谢谢！
-
-
