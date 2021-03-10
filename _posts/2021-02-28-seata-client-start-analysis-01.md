@@ -28,7 +28,7 @@ tags:
 
 除此之外，应用侧RPC客户端（TMClient、RMClient）初始化、与TC建立连接的流程，也是在GlobalTransactionScanner#afterPropertiesSet()中发起的：
 
-````java
+````js
     /**
      * package：io.seata.spring.annotation
      * class：GlobalTransactionScanner
@@ -52,7 +52,7 @@ tags:
 ### 类关系的设计
 查看RMClient#init()的源码，我们发现，RMClient先**构造**了一个RmNettyRemotingClient，然后执行其**初始化**init()方法。而RmNettyRemotingClient的**构造器**和**初始化**方法，都会逐层调用父类的构造器与初始化方法
 
-```java
+```js
     /**
      * RMClient的初始化逻辑
      * package：io.seata.rm
@@ -115,7 +115,7 @@ tags:
 
 在RMClient初始化的过程中，大家会发现，很多init()方法都设定了一些定时任务，而Seata应用侧与协调器的重连（连接）机制，就是通过定时任务来实现的：
 
-```java
+```js
     /**
      * package：io.seata.core.rpcn.netty
      * class：AbstractNettyRemotingClient

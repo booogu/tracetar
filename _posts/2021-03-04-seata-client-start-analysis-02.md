@@ -31,7 +31,7 @@ Seata作为一款中间件级的底层组件，是很谨慎引入第三方框架
 在[ Seata客户端启动过程剖析（一）](http://booogu.top/2021/02/28/seata-client-start-analysis-01/)中，我们分析了Seata应用侧TM与RM的初始化、以及应用侧如何创建Netty Channel并向TC Server发送注册请求的过程。除此之外，在RM初始化过程中，Seata的其他多个模块（注册中心、配置中心、负载均衡）也都纷纷登场，相互协作，共同完成了连接TC Server的过程。
 
 当执行Client重连TC Server的方法：NettyClientChannelManager.Channreconnect()时，首先需要根据当前的**事务分组**获取可用的TC Server地址列表：
-```java
+```js
     /**
      * NettyClientChannelManager.reconnect()
      * Reconnect to remote server of current transaction service group.
@@ -62,7 +62,7 @@ Seata作为一款中间件级的底层组件，是很谨慎引入第三方框架
 
 ### 从**注册中心**获取TC Server集群地址
 了解RM/TC连接TC时涉及的主要概念与步骤后，我们继续探究getAvailServerList方法：
-```java
+```js
     private List<String> getAvailServerList(String transactionServiceGroup) throws Exception {
         //① 使用注册中心工厂，获取注册中心实例
         //② 调用注册中心的查找方法lookUp()，根据事务分组名称获取TC集群中可用Server的地址列表
@@ -88,7 +88,7 @@ Seata作为一款中间件级的底层组件，是很谨慎引入第三方框架
 Seata的元配置文件支持Yaml、Properties等多种格式，而且可以集成到SpringBoot的application.yaml文件中（使用seata-spring-boot-starter即可），方便与SpringBoot集成。
 
 Seata中自带的默认元配置文件是registry.conf，当我们采用文件作为注册与配置中心时，registry.conf中的内容设置如下：
-```conf
+```js
 registry {
   # file 、nacos 、eureka、redis、zk、consul、etcd3、sofa
   type = "file"
@@ -106,7 +106,7 @@ config {
 }
 ```
 在如下源码中，我们可以发现，Seata使用的注册中心的类型，是从ConfigurationFactory.CURRENT_FILE_INSTANCE中获取的，而这个CURRENT_FILE_INSTANCE，就是我们所说的，Seata**元配置文件的实例**
-```java
+```js
     //在getInstance()中，调用buildRegistryService，构建具体的注册中心实例
     public static RegistryService getInstance() {
         if (instance == null) {
@@ -139,7 +139,7 @@ config {
     }
 ```
 我们来看一下元配置文件的初始化过程，当首次获取静态字段CURRENT_FILE_INSTANCE时，触发ConfigurationFactory类的初始化：
-```java
+```js
     //ConfigurationFactory类的静态块
     static {
         load();
@@ -191,7 +191,7 @@ load()方法的调用序列图如下：
 - Seata元配置文件后缀**支持3种后缀**，分别为yaml/properties/conf，在创建元配置文件实例时，会依次尝试匹配
 - Seata中**配置能力相关的顶级接口为Configuration**，各种配置中心均需实现此接口，Seata的元配置文件就是使用FileConfiguration（文件类型的配置中心）实现了此接口
 
-```java
+```js
 /**
  * Seata配置能力接口
  * package：io.seata.config
@@ -212,7 +212,7 @@ public interface Configuration {
 }
 ```
 - Seata提供了一个类型为ExtConfigurationProvider的扩展点，开放了对配置具体实现的扩展能力，它具有一个provide()方法，接收原有的Configuration，返回一个全新的Configuration，此接口方法的形式决定了，一般可以采用静态代理、动态代理、装饰器等设计模式来实现此方法，实现对原有Configuration的增强
-```java
+```js
 /**
  * Seata扩展配置提供者接口
  * package：io.seata.config
@@ -233,7 +233,7 @@ public interface ExtConfigurationProvider {
 经历过上述加载流程后，如果我们**没有扩展配置提供者**，我们将从Seata元配置文件中获取到注册中心的类型为file，同时创建了一个文件注册中心实例：FileRegistryServiceImpl
 #### 从注册中心获取TC Server地址
 获取注册中心的实例后，需要执行lookup()方法（RegistryFactory.getInstance().**lookup(transactionServiceGroup)**），FileRegistryServiceImpl.lookup()的实现如下：
-```java
+```js
     /**
      * 根据事务分组名称，获取TC Server可用地址列表
      * package：io.seata.discovery.registry
