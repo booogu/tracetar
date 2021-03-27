@@ -10,7 +10,7 @@ catalog: true
 tags:
     - Java
     - 读书笔记
-    - 基础
+    - CS基础
 ---
 
 ## 字符串常量与字符串对象

@@ -10,13 +10,12 @@ catalog: true
 tags:
     - Java
     - 读书笔记
-    - 基础
+    - CS基础
 ---
 
 ## ==与equals异同
 ==比较的都是值（Java只有值传递），对于基本数据类型比较的是数值，对于引用类型，比较的是引用对象的地址值
 Object的equals方法，就是调用==，所以equals方法需要重写，比如String类做了重写，仅比较字符串的内容是否相同
-uilder.append()，然后调用toString()，实现上会new String("HellowWorld")，但这个字符串不会在常量池中创建！
 
 ## 为什么重写equals必须同时重写hashCode？
 为了保证：两个对象相当（.equals），则它们的hashCode必须相同（不重写则达不到这个效果）

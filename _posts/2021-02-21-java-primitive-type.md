@@ -10,7 +10,7 @@ catalog: true
 tags:
     - Java
     - 读书笔记
-    - 基础
+    - CS基础
 ---
 
 ## Java基本类型的特点
