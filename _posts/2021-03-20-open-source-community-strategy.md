@@ -3,7 +3,7 @@ layout:     post
 comments: true
 title:      开源社区发展之道
 subtitle:   开源社区的发展策略讲座分享
-date:       2021-02-07 00:26:00
+date:       2021-03-20 00:26:00
 author:     "堵俊平"
 header-style: text
 catalog: true
