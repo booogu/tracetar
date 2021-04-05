@@ -1,7 +1,7 @@
 ---
 layout:     post
 comments: true
-title:      设计模式之美
+title:      面向对象（OO/OOD/OOP）思想导读
 subtitle:   面向对象特征 | 设计原则 | 设计模式
 date:       2021-03-29 23:56:00
 author:     "Booogu"
@@ -14,7 +14,7 @@ tags:
 ---
 
 
-## DP的重要性
+## 学习面向对象设计原则的意义
 - 作为基础知识，应对面试
 - 代码即名片，告别烂代码
 - 提高复杂代码的设计和开发能力
