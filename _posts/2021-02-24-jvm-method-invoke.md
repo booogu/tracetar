@@ -99,3 +99,60 @@ This gay has $ 3
 - 创建子类实例时，隐式调用父类构造器，父类构造器中调用showMeTheMoney的静态类型是Father，但实际类型是Child，所以按照invokevirtual的逻辑，会通过动态分配，调用实际类型的方法，即子类方法，而这时子类还没有实例化，所以子类money的零值是0，首先输出0，
 - 第二步，执行子类实例创建，输出的是子类的money值2
 - 最后一步，这里拿到的是，静态类型为Father的字段，那么根据字段不具有多态，这里的字段就是父类本身的字段，所以输出的是3.
+
+
+## 静态多分派，动态单分派
+为什么说Java目前是**静态多分派，动态多分派**的语言？
+
+````java
+publi class Dispatch {
+    static Class QQ{
+
+    }
+
+    static Class _360{
+
+    }
+
+    public static class Father{
+        public void hardChoice(QQ args){
+            System.out.println("father choose QQ");
+        }
+        public void hardChoice(_360 args){
+            System.out.println("father choose 360");
+        }
+    }
+
+    public static class Son extends Father{
+        public void hardChoice(QQ args){
+            System.out.println("son choose QQ");
+        }
+        public void hardChoice(_360 args){
+            System.out.println("son choose 360");
+        }
+    }
+
+    public static void main (String[] args){
+        Father father = new Father();
+        Father son = new Son();
+        father.hardChoice(new _360()); // father choose 360
+        son.hardChoice(new QQ()); // son choose QQ
+    }
+
+}
+````
+
+从以上调用结果分析：
+
+首先关注编译阶段中，编译器的选择过程，也就是静态分派的过程，静态分派时，选择结果的依据来自两个：
+- 静态类型（区别于实际类型，左侧的类型声明）是Father还是Son
+- 方法参数是QQ还是360
+
+根据这两个结果，两次调用分别产生了两条invokevirtual指令，两个指令的参数分别指向常量池中的：
+- Father:hardChoice(360)
+- Father:hardChoice(QQ)
+这两个方法的而符号引用。这个过程是`根据两个宗量来选择的（调用者静态类型和方法参数类型）`，因此是一个多分派的过程。
+
+再看运行阶段中，虚拟机的选择，也就是动态分派的过程，在执行“son.hardChoice(QQ)”这行代码时，更准确的说，是在执行这行代码对应的invokevirtual指令时，由于编译器已经决定方法的签名必须时hardChoice(QQ)，虚拟机现在不关心传递过来的参数时QQ还是360了，（因为这时方法的版本已经确定，无论选择哪个都不会对调用哪个方法造成影响，一定是父类/子类中的QQ方法了），因此唯一可以影响虚拟机选择的因素只有方法接受者的实际类型时Father还是Son，所以`只有一个宗量作为选择依据（调用者的实际类型）`，说明动态分派是单分派的过程。
+
+> 注意，虽然静态分派（解析）的过程，会按照静态类型确定调用的方法符号引用，但是运行时，由于invokevirtual指令的解析过程约定：以操作数栈顶的第一个元素的`实际类型`来寻找方法的`实际版本`（从当前类型找，依次向上找父类）
